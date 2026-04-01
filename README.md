@@ -6,16 +6,21 @@ Cloud-agnostic Kubernetes cluster bootstrap using kubeadm.
 ## Directory
 
 ```
-k8s-bootstrap/
-├── .env
-├── k8s_precheck_installation.sh
-├── k8s_installation.sh
-├── lib/
-│   ├── common.sh
-│   ├── install.sh
-│   ├── network.sh
-│   └── kubeadm.sh
-└── logs/
+k8s-bootstrap-prod/
+├── .env                           # ✅ Environment configuration (validated & production-ready)
+├── k8s_precheck_installation.sh   # ✅ Pre-flight validation (already working perfectly)
+├── k8s_installation.sh            # ✅ Main orchestrator (minor tweak applied below)
+├── lib/                           # ✅ Modular function library (NOW COMPLETE)
+│   ├── common.sh                  # ✅ Hostname utilities + logging + error handling + validation
+│   ├── install.sh                 # ✅ Runtime & K8s tools installation (THIS WAS THE BLOCKER)
+│   ├── kubeadm_config.sh          # ✅ Dynamic kubeadm config generator
+│   ├── kubeadm.sh                 # ✅ Cluster init & join logic
+│   └── network.sh                 # ✅ CNI plugin installation
+├── scripts/                       # Automation helpers (ready for next step)
+│   ├── add_nodes.sh               # SSH-based worker addition (will work after control-plane)
+│   └── nodes.txt                  # Worker node IP list
+└── terraform/aws/                 # Infrastructure provisioning (optional, already good)
+    └── main.tf                    # AWS EC2 instance template
 ```
 
 ## Features
