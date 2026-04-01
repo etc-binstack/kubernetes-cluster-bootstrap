@@ -4,7 +4,7 @@
 
 # Generate kubeadm config file for control plane init
 generate_kubeadm_config() {
-  log_info "Generating kubeadm configuration file..."
+  log_info "Generating kubeadm configuration file..." >&2
 
   local config_file="/tmp/kubeadm-config.yaml"
 
@@ -18,7 +18,7 @@ generate_kubeadm_config() {
   local advertise_addr="${API_SERVER_ADVERTISE_ADDRESS}"
   if [[ -z "${advertise_addr}" ]]; then
     advertise_addr=$(hostname -I | awk '{print $1}')
-    log_info "Auto-detected advertise address: ${advertise_addr}"
+    log_info "Auto-detected advertise address: ${advertise_addr}" >&2
   fi
 
   # Build cert SANs list
@@ -181,16 +181,16 @@ kind: KubeProxyConfiguration
 mode: iptables
 EOF
 
-  log_success "Kubeadm config generated: ${config_file}"
-  log_debug "Config file contents:"
-  [[ "${LOG_LEVEL}" == "debug" ]] && cat "$config_file"
+  log_success "Kubeadm config generated: ${config_file}" >&2
+  log_debug "Config file contents:" >&2
+  [[ "${LOG_LEVEL}" == "debug" ]] && cat "$config_file" >&2
 
   echo "$config_file"
 }
 
 # Generate kubeadm join config for workers
 generate_join_config() {
-  log_info "Generating kubeadm join configuration..."
+  log_info "Generating kubeadm join configuration..." >&2
 
   local config_file="/tmp/kubeadm-join-config.yaml"
   local node_name=$(hostname)
@@ -201,7 +201,7 @@ generate_join_config() {
   local api_endpoint=$(echo "$JOIN_COMMAND" | grep -oP 'join \K[^\s]+')
 
   if [[ -z "$token" || -z "$discovery_hash" || -z "$api_endpoint" ]]; then
-    log_error "Failed to parse JOIN_COMMAND"
+    log_error "Failed to parse JOIN_COMMAND" >&2
     return 1
   fi
 
@@ -244,7 +244,7 @@ kind: KubeletConfiguration
 cgroupDriver: ${CGROUP_DRIVER:-systemd}
 EOF
 
-  log_success "Join config generated: ${config_file}"
+  log_success "Join config generated: ${config_file}" >&2
   echo "$config_file"
 }
 
