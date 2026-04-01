@@ -25,6 +25,7 @@ k8s-bootstrap-prod/
 
 ## Features
 - Single-node & multi-node support
+- **Auto-update `.env` with join command** - Control plane installation automatically updates the `.env` file with the worker join command
 - Auto SSH worker join
 - Terraform AWS provisioning
 - Modular scripts
@@ -33,7 +34,7 @@ k8s-bootstrap-prod/
 ## Usage
 
 ### 1. Configure
-Edit `.env`
+Edit `.env` based on `.env.example`
 
 ### 2. Run Control Plane
 ```bash
@@ -41,9 +42,28 @@ sudo bash k8s_precheck_installation.sh
 sudo bash k8s_installation.sh
 ```
 
+**After installation completes:**
+- The join command is automatically saved to `join.sh` and `.env`
+- A backup of `.env` is created as `.env.backup.<timestamp>`
+- The `JOIN_COMMAND` field in `.env` is populated with the actual join token
+
 ### 3. Add Workers
+
+**Option A: Automated (using add_nodes.sh)**
 ```bash
+# The .env file already contains the join command
 bash scripts/add_nodes.sh
+```
+
+**Option B: Manual**
+```bash
+# On the control plane, check the join command
+cat join.sh
+
+# Or copy the .env file to worker nodes
+scp .env user@worker-node:/opt/kubernetes-cluster-bootstrap/
+# Then on worker node:
+sudo bash k8s_installation.sh
 ```
 
 ## Terraform (AWS)
