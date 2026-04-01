@@ -75,16 +75,31 @@ EOF
 disable_swap() {
   log_info "Ensuring swap is disabled..."
 
-  if swapon --show | grep -q '^'; then
-    log_warn "Swap is still enabled, disabling now..."
-    swapoff -a
+  # Check if swap is enabled (store result to avoid set -e issues)
+  local swap_output
+  swap_output=$(swapon --show 2>/dev/null || true)
+
+  if [[ -n "$swap_output" ]]; then
+    log_warn "Swap is currently enabled, disabling now..."
+    swapoff -a || {
+      log_error "Failed to disable swap"
+      return 1
+    }
 
     # Remove swap entries from /etc/fstab
-    sed -i '/\sswap\s/d' /etc/fstab
+    sed -i '/\sswap\s/d' /etc/fstab || {
+      log_warn "Could not modify /etc/fstab (may not exist or no swap entries)"
+    }
 
-    log_success "Swap disabled"
+    log_success "Swap disabled successfully"
   else
-    log_debug "Swap already disabled"
+    log_success "Swap already disabled"
+  fi
+
+  # Verify swap is off
+  if [[ -n "$(swapon --show 2>/dev/null)" ]]; then
+    log_error "Swap is still active after disable attempt"
+    return 1
   fi
 }
 
