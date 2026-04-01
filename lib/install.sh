@@ -124,7 +124,9 @@ export no_proxy="${NO_PROXY}"
 EOF
 
   # Apply for current session
-  source /etc/profile.d/proxy.sh
+  source /etc/profile.d/proxy.sh || {
+    log_warn "Failed to source proxy configuration"
+  }
 
   # Configure proxy for containerd
   if [[ "${CONTAINER_RUNTIME}" == "containerd" ]]; then
@@ -146,9 +148,12 @@ Environment="HTTPS_PROXY=${HTTPS_PROXY}"
 Environment="NO_PROXY=${NO_PROXY}"
 EOF
 
-  systemctl daemon-reload
+  systemctl daemon-reload || {
+    log_warn "Failed to reload systemd daemon"
+  }
 
   log_success "Proxy settings configured"
+  return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -299,7 +304,10 @@ install_container_runtime() {
   disable_swap || return 1
 
   # Configure proxy if specified
-  configure_proxy
+  configure_proxy || {
+    log_error "Failed to configure proxy settings"
+    return 1
+  }
 
   # Install the selected runtime
   case "${CONTAINER_RUNTIME}" in
