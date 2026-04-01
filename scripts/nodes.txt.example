@@ -1,0 +1,21 @@
+# =============================================================================
+# Worker Nodes Configuration File
+# =============================================================================
+# List worker node IP addresses (one per line)
+# Format: IP_ADDRESS [OPTIONAL_NAME]
+#
+# Lines starting with # are ignored (comments)
+# Empty lines are ignored
+#
+# Examples:
+# 192.168.1.10
+# 192.168.1.11 worker-01
+# 192.168.1.12 worker-02
+# =============================================================================
+
+# Example nodes (uncomment and modify):
+# 10.0.1.10 worker-node-01
+# 10.0.1.11 worker-node-02
+# 10.0.1.12 worker-node-03
+
+# Add your worker node IPs below:
