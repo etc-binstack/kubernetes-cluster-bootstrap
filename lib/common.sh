@@ -40,29 +40,36 @@ rotate_logs() {
 
 # Logging functions
 log_debug() {
-  [[ "${LOG_LEVEL}" == "debug" ]] && echo "[$(date +'%Y-%m-%d %H:%M:%S')] [DEBUG] $*"
+  if [[ "${LOG_LEVEL}" == "debug" ]]; then
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] [DEBUG] $*"
+  fi
+  return 0
 }
 
 log_info() {
   if [[ "${LOG_LEVEL}" =~ ^(debug|info)$ ]]; then
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] [INFO] $*"
   fi
+  return 0
 }
 
 log_warn() {
   if [[ "${LOG_LEVEL}" =~ ^(debug|info|warn)$ ]]; then
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] [WARN] $*" >&2
   fi
+  return 0
 }
 
 log_error() {
   echo "[$(date +'%Y-%m-%d %H:%M:%S')] [ERROR] $*" >&2
+  return 0
 }
 
 log_success() {
   if [[ "${LOG_LEVEL}" =~ ^(debug|info)$ ]]; then
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] [SUCCESS] ✅ $*"
   fi
+  return 0
 }
 
 # -----------------------------------------------------------------------------
