@@ -66,6 +66,36 @@ scp .env user@worker-node:/opt/kubernetes-cluster-bootstrap/
 sudo bash k8s_installation.sh
 ```
 
+### 4. Cleanup & Reinstall
+
+To completely uninstall and cleanup the cluster:
+
+**Standard cleanup (preserves config files):**
+```bash
+sudo bash k8s_installation.sh cleanup
+```
+
+**Full cleanup (removes everything):**
+```bash
+# Edit .env and set CLEANUP_FULL=true, or export it:
+export CLEANUP_FULL=true
+sudo bash k8s_installation.sh cleanup
+```
+
+**What gets cleaned:**
+- ✅ Drains and removes node from cluster
+- ✅ Runs `kubeadm reset`
+- ✅ Removes CNI network interfaces (Calico, Flannel, etc.)
+- ✅ Cleans up `/etc/cni/net.d`
+- ✅ Flushes iptables and IPVS rules
+- ✅ Restarts container runtime
+- ✅ (If `CLEANUP_FULL=true`) Removes `/etc/kubernetes`, `/var/lib/kubelet`, `/var/lib/etcd`, kubeconfig files
+
+After cleanup, you can reinstall:
+```bash
+sudo bash k8s_installation.sh
+```
+
 ## Terraform (AWS)
 ```bash
 cd terraform/aws

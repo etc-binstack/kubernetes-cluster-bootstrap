@@ -111,6 +111,34 @@ cleanup_on_failure() {
     fi
   done
 
+  # Clean up CNI network interfaces
+  log_info "Cleaning up CNI network interfaces..."
+  ip link delete cali0 2>/dev/null || true
+  ip link delete tunl0 2>/dev/null || true
+  ip link delete vxlan.calico 2>/dev/null || true
+  ip link delete flannel.1 2>/dev/null || true
+  ip link delete cni0 2>/dev/null || true
+
+  # Remove all calico interfaces
+  ip link | grep cali | awk '{print $2}' | cut -d@ -f1 | xargs -I {} ip link delete {} 2>/dev/null || true
+
+  # Clean up CNI configuration
+  log_info "Removing CNI configuration..."
+  rm -rf /etc/cni/net.d
+
+  # Clean up iptables rules
+  log_info "Flushing iptables rules..."
+  iptables -F 2>/dev/null || true
+  iptables -t nat -F 2>/dev/null || true
+  iptables -t mangle -F 2>/dev/null || true
+  iptables -X 2>/dev/null || true
+
+  # Clean up IPVS tables if available
+  if command -v ipvsadm &>/dev/null; then
+    log_info "Clearing IPVS tables..."
+    ipvsadm --clear 2>/dev/null || true
+  fi
+
   # Remove kubernetes directories (optional, based on config)
   if [[ "${CLEANUP_FULL:-false}" == "true" ]]; then
     log_warn "Full cleanup enabled - removing Kubernetes directories..."
@@ -118,7 +146,19 @@ cleanup_on_failure() {
     rm -rf /var/lib/kubelet
     rm -rf /var/lib/etcd
     rm -rf $HOME/.kube
+
+    # Remove kubeconfig for all users
+    for user_home in /home/*; do
+      if [[ -d "$user_home/.kube" ]]; then
+        rm -rf "$user_home/.kube"
+        log_info "Removed kubeconfig for $(basename $user_home)"
+      fi
+    done
   fi
+
+  # Restart container runtime to clean up any lingering state
+  log_info "Restarting container runtime..."
+  systemctl restart containerd 2>/dev/null || systemctl restart crio 2>/dev/null || true
 
   log_info "Cleanup completed"
 }
