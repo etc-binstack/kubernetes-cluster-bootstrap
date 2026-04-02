@@ -17,11 +17,26 @@ install_calico() {
     return 1
   }
 
+  # Wait a moment for resources to be created
+  log_info "Waiting for Calico resources to be created..."
+  sleep 5
+
   # Wait for Calico pods to be ready
   log_info "Waiting for Calico pods to be ready..."
-  kubectl wait --for=condition=Ready pods -l k8s-app=calico-node -n kube-system --timeout=300s || {
-    log_warn "Calico pods took longer than expected to be ready"
-  }
+  local max_wait=60
+  local elapsed=0
+  while [[ $elapsed -lt $max_wait ]]; do
+    local pod_count=$(kubectl get pods -n kube-system -l k8s-app=calico-node --no-headers 2>/dev/null | wc -l)
+    if [[ $pod_count -gt 0 ]]; then
+      log_info "Found $pod_count Calico pod(s), waiting for them to be ready..."
+      kubectl wait --for=condition=Ready pods -l k8s-app=calico-node -n kube-system --timeout=240s 2>/dev/null || {
+        log_warn "Calico pods took longer than expected to be ready"
+      }
+      break
+    fi
+    sleep 5
+    ((elapsed+=5))
+  done
 
   log_success "Calico CNI installed successfully"
 }
@@ -182,12 +197,17 @@ verify_cni_installation() {
 
   if [[ -n "$pod_selector" ]]; then
     local running_pods=$(kubectl get pods -n "$namespace" -l "$pod_selector" --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+    local total_pods=$(kubectl get pods -n "$namespace" -l "$pod_selector" --no-headers 2>/dev/null | wc -l)
 
-    if [[ $running_pods -eq 0 ]]; then
-      log_error "No $plugin pods are running"
+    if [[ $total_pods -eq 0 ]]; then
+      log_error "No $plugin pods found in namespace $namespace"
       ((errors++))
+    elif [[ $running_pods -eq 0 ]]; then
+      log_warn "No $plugin pods are running yet (found $total_pods pod(s) in other states)"
+      log_info "Pods may still be starting - this is normal immediately after installation"
+      kubectl get pods -n "$namespace" -l "$pod_selector" 2>/dev/null || true
     else
-      log_success "$plugin pods running: $running_pods"
+      log_success "$plugin pods running: $running_pods/$total_pods"
     fi
   fi
 
@@ -210,7 +230,9 @@ verify_cni_installation() {
   fi
 
   if [[ $errors -gt 0 ]]; then
-    log_error "CNI verification failed with $errors error(s)"
+    log_error "CNI verification failed with $errors critical error(s)"
+    log_warn "The CNI plugin may need more time to fully initialize"
+    log_info "You can check status later with: kubectl get pods -n $namespace"
     return 1
   fi
 

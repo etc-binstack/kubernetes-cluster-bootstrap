@@ -40,29 +40,36 @@ rotate_logs() {
 
 # Logging functions
 log_debug() {
-  [[ "${LOG_LEVEL}" == "debug" ]] && echo "[$(date +'%Y-%m-%d %H:%M:%S')] [DEBUG] $*"
+  if [[ "${LOG_LEVEL}" == "debug" ]]; then
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] [DEBUG] $*"
+  fi
+  return 0
 }
 
 log_info() {
   if [[ "${LOG_LEVEL}" =~ ^(debug|info)$ ]]; then
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] [INFO] $*"
   fi
+  return 0
 }
 
 log_warn() {
   if [[ "${LOG_LEVEL}" =~ ^(debug|info|warn)$ ]]; then
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] [WARN] $*" >&2
   fi
+  return 0
 }
 
 log_error() {
   echo "[$(date +'%Y-%m-%d %H:%M:%S')] [ERROR] $*" >&2
+  return 0
 }
 
 log_success() {
   if [[ "${LOG_LEVEL}" =~ ^(debug|info)$ ]]; then
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] [SUCCESS] ✅ $*"
   fi
+  return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -104,6 +111,34 @@ cleanup_on_failure() {
     fi
   done
 
+  # Clean up CNI network interfaces
+  log_info "Cleaning up CNI network interfaces..."
+  ip link delete cali0 2>/dev/null || true
+  ip link delete tunl0 2>/dev/null || true
+  ip link delete vxlan.calico 2>/dev/null || true
+  ip link delete flannel.1 2>/dev/null || true
+  ip link delete cni0 2>/dev/null || true
+
+  # Remove all calico interfaces
+  ip link | grep cali | awk '{print $2}' | cut -d@ -f1 | xargs -I {} ip link delete {} 2>/dev/null || true
+
+  # Clean up CNI configuration
+  log_info "Removing CNI configuration..."
+  rm -rf /etc/cni/net.d
+
+  # Clean up iptables rules
+  log_info "Flushing iptables rules..."
+  iptables -F 2>/dev/null || true
+  iptables -t nat -F 2>/dev/null || true
+  iptables -t mangle -F 2>/dev/null || true
+  iptables -X 2>/dev/null || true
+
+  # Clean up IPVS tables if available
+  if command -v ipvsadm &>/dev/null; then
+    log_info "Clearing IPVS tables..."
+    ipvsadm --clear 2>/dev/null || true
+  fi
+
   # Remove kubernetes directories (optional, based on config)
   if [[ "${CLEANUP_FULL:-false}" == "true" ]]; then
     log_warn "Full cleanup enabled - removing Kubernetes directories..."
@@ -111,7 +146,19 @@ cleanup_on_failure() {
     rm -rf /var/lib/kubelet
     rm -rf /var/lib/etcd
     rm -rf $HOME/.kube
+
+    # Remove kubeconfig for all users
+    for user_home in /home/*; do
+      if [[ -d "$user_home/.kube" ]]; then
+        rm -rf "$user_home/.kube"
+        log_info "Removed kubeconfig for $(basename $user_home)"
+      fi
+    done
   fi
+
+  # Restart container runtime to clean up any lingering state
+  log_info "Restarting container runtime..."
+  systemctl restart containerd 2>/dev/null || systemctl restart crio 2>/dev/null || true
 
   log_info "Cleanup completed"
 }
@@ -131,6 +178,89 @@ cleanup_cluster() {
   cleanup_on_failure
 
   log_success "Cluster cleanup completed successfully"
+
+  echo ""
+  echo "============================================================"
+  echo "  Kubernetes Cluster Uninstallation Complete"
+  echo "============================================================"
+  echo ""
+  echo "The following actions have been performed:"
+  echo "  ✓ Cluster components removed (pods, services, configs)"
+  echo "  ✓ Network interfaces cleaned (CNI, iptables)"
+  echo "  ✓ Container runtime reset"
+  echo ""
+  echo "Kubernetes binaries are still installed:"
+  echo "  • kubectl"
+  echo "  • kubeadm"
+  echo "  • kubelet"
+  echo ""
+  echo "============================================================"
+  echo ""
+
+  # Interactive prompt for binary removal
+  if [[ -t 0 ]]; then  # Check if running interactively
+    echo "What would you like to do next?"
+    echo ""
+    echo "  1) Keep binaries for reinstallation (recommended)"
+    echo "  2) Remove all Kubernetes binaries completely"
+    echo "  3) Exit without changes"
+    echo ""
+    read -p "Enter your choice [1-3]: " choice
+
+    case $choice in
+      2)
+        echo ""
+        log_warn "Removing Kubernetes binaries..."
+
+        # Unhold packages
+        apt-mark unhold kubelet kubeadm kubectl 2>/dev/null || true
+
+        # Remove packages
+        apt remove -y kubelet kubeadm kubectl kubernetes-cni cri-tools || {
+          log_error "Failed to remove Kubernetes packages"
+          return 1
+        }
+
+        # Optional: Remove repository
+        read -p "Remove Kubernetes APT repository as well? [y/N]: " remove_repo
+        if [[ "$remove_repo" =~ ^[Yy]$ ]]; then
+          rm -f /etc/apt/sources.list.d/kubernetes.list
+          rm -f /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+          apt update 2>/dev/null || true
+          log_success "Kubernetes repository removed"
+        fi
+
+        log_success "Kubernetes binaries removed completely"
+        echo ""
+        echo "Your system is now clean. To reinstall Kubernetes, run:"
+        echo "  sudo bash k8s_installation.sh"
+        ;;
+      1)
+        echo ""
+        log_info "Kubernetes binaries preserved for future use"
+        echo ""
+        echo "To reinstall the cluster, simply run:"
+        echo "  sudo bash k8s_installation.sh"
+        echo ""
+        echo "Your cluster will be recreated with fresh configuration."
+        ;;
+      3)
+        echo ""
+        log_info "No changes made to binaries"
+        ;;
+      *)
+        echo ""
+        log_warn "Invalid choice. No changes made to binaries."
+        ;;
+    esac
+  else
+    # Non-interactive mode
+    log_info "Running in non-interactive mode. Binaries preserved."
+    log_info "To remove binaries, run: apt remove -y kubelet kubeadm kubectl"
+  fi
+
+  echo ""
+  echo "============================================================"
 }
 
 # -----------------------------------------------------------------------------

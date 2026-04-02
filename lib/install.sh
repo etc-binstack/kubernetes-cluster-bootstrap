@@ -75,16 +75,31 @@ EOF
 disable_swap() {
   log_info "Ensuring swap is disabled..."
 
-  if swapon --show | grep -q '^'; then
-    log_warn "Swap is still enabled, disabling now..."
-    swapoff -a
+  # Check if swap is enabled (store result to avoid set -e issues)
+  local swap_output
+  swap_output=$(swapon --show 2>/dev/null || true)
+
+  if [[ -n "$swap_output" ]]; then
+    log_warn "Swap is currently enabled, disabling now..."
+    swapoff -a || {
+      log_error "Failed to disable swap"
+      return 1
+    }
 
     # Remove swap entries from /etc/fstab
-    sed -i '/\sswap\s/d' /etc/fstab
+    sed -i '/\sswap\s/d' /etc/fstab || {
+      log_warn "Could not modify /etc/fstab (may not exist or no swap entries)"
+    }
 
-    log_success "Swap disabled"
+    log_success "Swap disabled successfully"
   else
-    log_debug "Swap already disabled"
+    log_success "Swap already disabled"
+  fi
+
+  # Verify swap is off
+  if [[ -n "$(swapon --show 2>/dev/null)" ]]; then
+    log_error "Swap is still active after disable attempt"
+    return 1
   fi
 }
 
@@ -109,7 +124,9 @@ export no_proxy="${NO_PROXY}"
 EOF
 
   # Apply for current session
-  source /etc/profile.d/proxy.sh
+  source /etc/profile.d/proxy.sh || {
+    log_warn "Failed to source proxy configuration"
+  }
 
   # Configure proxy for containerd
   if [[ "${CONTAINER_RUNTIME}" == "containerd" ]]; then
@@ -131,9 +148,12 @@ Environment="HTTPS_PROXY=${HTTPS_PROXY}"
 Environment="NO_PROXY=${NO_PROXY}"
 EOF
 
-  systemctl daemon-reload
+  systemctl daemon-reload || {
+    log_warn "Failed to reload systemd daemon"
+  }
 
   log_success "Proxy settings configured"
+  return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -284,7 +304,10 @@ install_container_runtime() {
   disable_swap || return 1
 
   # Configure proxy if specified
-  configure_proxy
+  configure_proxy || {
+    log_error "Failed to configure proxy settings"
+    return 1
+  }
 
   # Install the selected runtime
   case "${CONTAINER_RUNTIME}" in
@@ -326,6 +349,12 @@ install_kubernetes_tools() {
 
   # Add Kubernetes repository GPG key
   log_info "Adding Kubernetes repository..."
+
+  # Remove existing key if present to avoid prompts
+  if [[ -f /etc/apt/keyrings/kubernetes-apt-keyring.gpg ]]; then
+    log_info "Removing existing Kubernetes GPG key..."
+    rm -f /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  fi
 
   if [[ -n "${HTTP_PROXY}" ]]; then
     # Use proxy for curl

@@ -127,10 +127,58 @@ generate_join_command() {
   log_success "Join command saved to: join.sh (expires in $token_ttl)"
   log_info "Join command: $join_cmd"
 
+  # Update .env file with the actual join command
+  update_env_join_command "$join_cmd"
+
   # If HA mode, also extract certificate key
   if [[ "${HA_MODE}" == "true" ]]; then
     generate_ha_join_command
   fi
+}
+
+# Update .env file with the generated join command
+update_env_join_command() {
+  local join_cmd="$1"
+
+  if [[ -z "$join_cmd" ]]; then
+    log_warn "No join command provided to update .env" >&2
+    return 1
+  fi
+
+  # Check if .env file exists
+  if [[ ! -f ".env" ]]; then
+    log_warn ".env file not found, skipping auto-update" >&2
+    return 1
+  fi
+
+  log_info "Updating .env file with join command..." >&2
+
+  # Escape special characters for sed
+  local escaped_cmd=$(echo "$join_cmd" | sed 's/[\/&]/\\&/g')
+
+  # Check if JOIN_COMMAND line exists
+  if grep -q "^JOIN_COMMAND=" .env; then
+    # Update existing JOIN_COMMAND line
+    sed -i "s|^JOIN_COMMAND=.*|JOIN_COMMAND=\"$escaped_cmd\"|" .env
+    log_success ".env file updated with new join command" >&2
+  elif grep -q "^#JOIN_COMMAND=" .env; then
+    # Uncomment and update if it's commented
+    sed -i "s|^#JOIN_COMMAND=.*|JOIN_COMMAND=\"$escaped_cmd\"|" .env
+    log_success ".env file updated with new join command (uncommented)" >&2
+  else
+    # Add JOIN_COMMAND to the end of file if it doesn't exist
+    echo "" >> .env
+    echo "# Auto-generated join command (generated: $(date))" >> .env
+    echo "JOIN_COMMAND=\"$join_cmd\"" >> .env
+    log_success "JOIN_COMMAND added to .env file" >&2
+  fi
+
+  # Create a backup with timestamp
+  local backup_file=".env.backup.$(date +%Y%m%d_%H%M%S)"
+  cp .env "$backup_file"
+  log_info "Backup created: $backup_file" >&2
+
+  return 0
 }
 
 # Generate HA control plane join command
@@ -219,7 +267,7 @@ post_install_validation() {
   local errors=0
 
   # Check if kubectl is working
-  if ! kubectl version --short &>/dev/null; then
+  if ! kubectl get --raw /healthz &>/dev/null; then
     log_error "kubectl is not working properly"
     ((errors++))
   else
