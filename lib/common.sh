@@ -178,6 +178,89 @@ cleanup_cluster() {
   cleanup_on_failure
 
   log_success "Cluster cleanup completed successfully"
+
+  echo ""
+  echo "============================================================"
+  echo "  Kubernetes Cluster Uninstallation Complete"
+  echo "============================================================"
+  echo ""
+  echo "The following actions have been performed:"
+  echo "  ✓ Cluster components removed (pods, services, configs)"
+  echo "  ✓ Network interfaces cleaned (CNI, iptables)"
+  echo "  ✓ Container runtime reset"
+  echo ""
+  echo "Kubernetes binaries are still installed:"
+  echo "  • kubectl"
+  echo "  • kubeadm"
+  echo "  • kubelet"
+  echo ""
+  echo "============================================================"
+  echo ""
+
+  # Interactive prompt for binary removal
+  if [[ -t 0 ]]; then  # Check if running interactively
+    echo "What would you like to do next?"
+    echo ""
+    echo "  1) Keep binaries for reinstallation (recommended)"
+    echo "  2) Remove all Kubernetes binaries completely"
+    echo "  3) Exit without changes"
+    echo ""
+    read -p "Enter your choice [1-3]: " choice
+
+    case $choice in
+      2)
+        echo ""
+        log_warn "Removing Kubernetes binaries..."
+
+        # Unhold packages
+        apt-mark unhold kubelet kubeadm kubectl 2>/dev/null || true
+
+        # Remove packages
+        apt remove -y kubelet kubeadm kubectl kubernetes-cni cri-tools || {
+          log_error "Failed to remove Kubernetes packages"
+          return 1
+        }
+
+        # Optional: Remove repository
+        read -p "Remove Kubernetes APT repository as well? [y/N]: " remove_repo
+        if [[ "$remove_repo" =~ ^[Yy]$ ]]; then
+          rm -f /etc/apt/sources.list.d/kubernetes.list
+          rm -f /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+          apt update 2>/dev/null || true
+          log_success "Kubernetes repository removed"
+        fi
+
+        log_success "Kubernetes binaries removed completely"
+        echo ""
+        echo "Your system is now clean. To reinstall Kubernetes, run:"
+        echo "  sudo bash k8s_installation.sh"
+        ;;
+      1)
+        echo ""
+        log_info "Kubernetes binaries preserved for future use"
+        echo ""
+        echo "To reinstall the cluster, simply run:"
+        echo "  sudo bash k8s_installation.sh"
+        echo ""
+        echo "Your cluster will be recreated with fresh configuration."
+        ;;
+      3)
+        echo ""
+        log_info "No changes made to binaries"
+        ;;
+      *)
+        echo ""
+        log_warn "Invalid choice. No changes made to binaries."
+        ;;
+    esac
+  else
+    # Non-interactive mode
+    log_info "Running in non-interactive mode. Binaries preserved."
+    log_info "To remove binaries, run: apt remove -y kubelet kubeadm kubectl"
+  fi
+
+  echo ""
+  echo "============================================================"
 }
 
 # -----------------------------------------------------------------------------

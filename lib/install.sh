@@ -350,6 +350,12 @@ install_kubernetes_tools() {
   # Add Kubernetes repository GPG key
   log_info "Adding Kubernetes repository..."
 
+  # Remove existing key if present to avoid prompts
+  if [[ -f /etc/apt/keyrings/kubernetes-apt-keyring.gpg ]]; then
+    log_info "Removing existing Kubernetes GPG key..."
+    rm -f /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  fi
+
   if [[ -n "${HTTP_PROXY}" ]]; then
     # Use proxy for curl
     curl -x "${HTTP_PROXY}" -fsSL "https://pkgs.k8s.io/core:/stable:/v${K8S_VERSION}/deb/Release.key" | \

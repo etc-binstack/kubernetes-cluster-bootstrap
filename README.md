@@ -91,6 +91,21 @@ sudo bash k8s_installation.sh cleanup
 - ✅ Restarts container runtime
 - ✅ (If `CLEANUP_FULL=true`) Removes `/etc/kubernetes`, `/var/lib/kubelet`, `/var/lib/etcd`, kubeconfig files
 
+**Interactive cleanup options:**
+
+After cleanup completes, you'll be prompted with:
+```
+What would you like to do next?
+
+  1) Keep binaries for reinstallation (recommended)
+  2) Remove all Kubernetes binaries completely
+  3) Exit without changes
+```
+
+- **Option 1 (Recommended)**: Keeps kubectl, kubeadm, kubelet for quick reinstallation
+- **Option 2**: Completely removes all Kubernetes packages and optionally the APT repository
+- **Option 3**: Exit without making changes
+
 After cleanup, you can reinstall:
 ```bash
 sudo bash k8s_installation.sh
