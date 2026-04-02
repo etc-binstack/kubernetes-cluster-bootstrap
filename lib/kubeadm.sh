@@ -267,7 +267,7 @@ post_install_validation() {
   local errors=0
 
   # Check if kubectl is working
-  if ! kubectl version --short &>/dev/null; then
+  if ! kubectl get --raw /healthz &>/dev/null; then
     log_error "kubectl is not working properly"
     ((errors++))
   else
